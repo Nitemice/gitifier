@@ -121,6 +121,10 @@ makeGitPointer()
     # because re-init'ing against the repo messes it up.
     dotgit="gitdir: $REPODIR/$REPONAME/.git"
     echo $dotgit > .git
+
+    if [[ -f "$REPODIR/$REPONAME/.gitignore" ]]; then
+        cp "$REPODIR/$REPONAME/.gitignore" .gitignore
+    fi
 }
 
 addDir()
@@ -148,7 +152,7 @@ addFile()
 {
     file="$1"
     # Make copy of file, as REPONAME, in REPONAME directory
-    cp -r "$file" "$REPONAME"/"$REPONAME"
+    cp -r "$file" "$REPONAME/$REPONAME"
 
     pushd "$REPONAME"
 
