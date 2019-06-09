@@ -1,4 +1,5 @@
-# Directory Mode Demo
-```
+# Directories Mode Demo
+
+```sh
 find -maxdepth 1 -mindepth 1 -type d -printf "%f\n" | ../../gitifier.sh foo
 ```
