@@ -6,12 +6,23 @@ REPODIR=""
 IGNOREFILE=""
 DIRMODE=1
 MERGEDIRS=0
+DEBUGPRINT=0
+
+debugPrint()
+{
+    echo "PATHS: ${PATHS[*]}"
+    echo "REPONAME: $REPONAME"
+    echo "REPODIR: $REPODIR"
+    echo "IGNOREFILE: $IGNOREFILE"
+    echo "DIRMODE: $DIRMODE"
+    echo "MERGEDIRS: $MERGEDIRS"
+}
 
 usage()
 {
     usage="NoVC Gitifier
 Usage: $0 [-d|-f] [-i gitignore] reponame
-   -d: folders mode
+   -d: directories mode
    -f: files mode
    -i: .gitignore file to use
    -m: merge directories
@@ -42,6 +53,10 @@ parseArgs()
                 ;;
             -m|--mergedirs)
                 MERGEDIRS=1
+                shift # past argument
+                ;;
+            -e|--debug)
+                DEBUGPRINT=1
                 shift # past argument
                 ;;
             *) # unknown option
@@ -129,6 +144,21 @@ addDir()
     rm -rf "$REPONAME"_inprogress
 }
 
+addFile()
+{
+    file="$1"
+    # Make copy of file, as REPONAME, in REPONAME directory
+    cp -r "$file" "$REPONAME"/"$REPONAME"
+
+    pushd "$REPONAME"
+
+    # Make commit
+    git add --all
+    git commit -m "$file"
+    
+    popd
+}
+
 # Parse arguments
 parseArgs $@
 
@@ -138,15 +168,22 @@ readInput
 # Initialise repo
 initRepo
 
+# Show debug info
+if (( "$DEBUGPRINT" )); then
+    debugPrint
+fi
+
 # Iterate through the given PATHS
 for ix in ${!PATHS[*]}; do
     currentpath=${PATHS[$ix]//[$'\t\r\n']}
     echo "Adding $currentpath to git repo"
-    if [ "$DIRMODE" ]; then
+    if (( "$DIRMODE" )); then
         addDir "$currentpath"
     else
         addFile "$currentpath"
     fi
 done
 
-concludeRepo
+if (( "$DIRMODE" )); then
+    concludeRepo
+fi
