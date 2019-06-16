@@ -3,9 +3,10 @@
 PATHS=[]
 REPONAME=""
 REPODIR=""
+MODE=DIR
 IGNOREFILE=""
-DIRMODE=1
 MERGEDIRS=0
+FLATTENZIP=0
 DEBUGPRINT=0
 
 debugPrint()
@@ -13,21 +14,27 @@ debugPrint()
     echo "PATHS: ${PATHS[*]}"
     echo "REPONAME: $REPONAME"
     echo "REPODIR: $REPODIR"
+    echo "MODE: $MODE"
     echo "IGNOREFILE: $IGNOREFILE"
-    echo "DIRMODE: $DIRMODE"
     echo "MERGEDIRS: $MERGEDIRS"
+    echo "FLATTENZIP: $FLATTENZIP"
 }
 
 usage()
 {
     usage="NoVC Gitifier
-Usage: $0 [-d|-f] reponame
+Usage: $0 [-d|-f|-z] reponame
        $0 -d [-i gitignore] [-m] reponame
+       $0 -z [-i gitignore] [-l] reponame
        $0 -f reponame
+
    -d: directories mode
    -f: files mode
+   -z: archives mode
+
    -i: .gitignore file to use
    -m: merge directories
+   -l: flatten directories
     "
     echo "$usage"
     echo "$1"
@@ -41,11 +48,15 @@ parseArgs()
         opt="$1"
         case $opt in
             -d|--dir)
-                DIRMODE=1
+                MODE=DIR
                 shift # past argument
                 ;;
             -f|--file)
-                DIRMODE=0
+                MODE=FILE
+                shift # past argument
+                ;;
+            -z|--archive)
+                MODE=ZIP
                 shift # past argument
                 ;;
             -i|--ignorefile|--gitignore)
@@ -55,6 +66,10 @@ parseArgs()
                 ;;
             -m|--mergedirs)
                 MERGEDIRS=1
+                shift # past argument
+                ;;
+            -l|--flattenZip)
+                FLATTENZIP=1
                 shift # past argument
                 ;;
             -e|--debug)
@@ -94,6 +109,7 @@ initRepo()
 {
     # Make REPONAME directory
     mkdir "$REPONAME" || usage "ERR: $REPONAME exists"
+
     # Add any ignore file
     if [[ -f "$IGNOREFILE" ]]; then
         cp "$IGNOREFILE" "$REPONAME"/.gitignore
@@ -124,8 +140,28 @@ makeGitPointer()
     dotgit="gitdir: $REPODIR/$REPONAME/.git"
     echo $dotgit > .git
 
+    # Add gitignore file
     if [[ -f "$REPODIR/$REPONAME/.gitignore" ]]; then
         cp "$REPODIR/$REPONAME/.gitignore" .gitignore
+    fi
+}
+
+makeCommit()
+{
+    # Commit all changed files
+    git add --all
+    git commit -m "$1"
+}
+
+flattenDir()
+{
+    # If there's only one directory in the folder,
+    # move everything out of it, and recurse
+    local fl=($(find -mindepth 1 -maxdepth 1))
+    if (( ${#fl[@]} == 1 )) && [[ -d "${fl[0]}" ]]; then
+        mv "${fl[0]}"/* .
+        rmdir "${fl[0]}"
+        flattenDir
     fi
 }
 
@@ -133,7 +169,7 @@ addDir()
 {
     dir="$1"
     # Make copy of dir, under REPONAME_inprogress
-    cp -r "$dir" "$REPONAME"_inprogress
+    cp -r "$dir/" "$REPONAME"_inprogress
 
     pushd "$REPONAME"_inprogress
 
@@ -141,8 +177,7 @@ addDir()
     makeGitPointer
 
     # Make commit
-    git add --all
-    git commit -m "$dir"
+    makeCommit "$dir"
     
     popd
 
@@ -159,10 +194,39 @@ addFile()
     pushd "$REPONAME"
 
     # Make commit
-    git add --all
-    git commit -m "$file"
+    makeCommit "$file"
     
     popd
+}
+
+addZip()
+{
+    zip="$1"
+    # Unpack zip into dir, under REPONAME_inprogress
+    if [[ $zip == *.zip ]]; then
+        unzip "$zip" -d "$REPONAME"_inprogress
+    else
+        mkdir "$REPONAME"_inprogress
+        tar -xf "$zip" -C "$REPONAME"_inprogress
+    fi
+
+    pushd "$REPONAME"_inprogress
+
+    # Remove any nested directories
+    if (( "$FLATTENZIP" )); then
+        flattenDir
+    fi
+
+    # Link in git files
+    makeGitPointer
+
+    # Make commit
+    makeCommit "$zip"
+    
+    popd
+
+    # Blow away folder
+    rm -rf "$REPONAME"_inprogress
 }
 
 # Parse arguments
@@ -183,13 +247,15 @@ fi
 for ix in ${!PATHS[*]}; do
     currentpath=${PATHS[$ix]//[$'\t\r\n']}
     echo "Adding $currentpath to git repo"
-    if (( "$DIRMODE" )); then
+    if [ "$MODE" = "DIR" ]; then
         addDir "$currentpath"
-    else
+    elif [ "$MODE" = "FILE" ]; then
         addFile "$currentpath"
+    elif [ "$MODE" = "ZIP" ]; then
+        addZip "$currentpath"
     fi
 done
 
-if (( "$DIRMODE" )); then
+if [ "$MODE" = "DIR" ] || [ "$MODE" = "ZIP" ]; then
     concludeRepo
 fi
