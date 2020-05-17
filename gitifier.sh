@@ -23,13 +23,13 @@ debugPrint()
 usage()
 {
     usage="NoVC Gitifier
-Usage: $0 [-d|-f|-z] reponame
+Usage: $0 [-f|-d|-z] reponame
+       $0 -f reponame
        $0 -d [-i gitignore] [-m] reponame
        $0 -z [-i gitignore] [-l] reponame
-       $0 -f reponame
 
-   -d: directories mode
    -f: files mode
+   -d: directories mode
    -z: archives mode
 
    -i: .gitignore file to use
