@@ -1,6 +1,6 @@
 # NoVC Gitifier
 
-Tool for converting multiple versions of files into a git history
+Tool for converting multiple versions of files into a git history.
 
 Gitifier has three modes:
 

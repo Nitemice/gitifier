@@ -1,16 +1,17 @@
 #!/bin/bash
 
-PATHS=[]
-REPONAME=""
-REPODIR=""
-MODE=DIR
-IGNOREFILE=""
+PATHS=()
+REPONAME=
+REPODIR=
+MODE='DIR'
+IGNOREFILE=
 MERGEDIRS=0
 FLATTENZIP=0
 DEBUGPRINT=0
 
 debugPrint()
 {
+    echo
     echo "PATHS: ${PATHS[*]}"
     echo "REPONAME: $REPONAME"
     echo "REPODIR: $REPODIR"
@@ -38,6 +39,12 @@ Usage: $0 [-f|-d|-z] reponame
     "
     echo "$usage"
     echo "$1"
+
+    # Show debug info
+    if (( "$DEBUGPRINT" )); then
+        debugPrint
+    fi
+
     exit
 }
 
@@ -48,15 +55,15 @@ parseArgs()
         opt="$1"
         case $opt in
             -d|--dir)
-                MODE=DIR
+                MODE='DIR'
                 shift # past argument
                 ;;
             -f|--file)
-                MODE=FILE
+                MODE='FILE'
                 shift # past argument
                 ;;
             -z|--archive)
-                MODE=ZIP
+                MODE='ZIP'
                 shift # past argument
                 ;;
             -i|--ignorefile|--gitignore)
@@ -89,19 +96,28 @@ parseArgs()
     else
         usage "ERR: No repo name"
     fi
+
+    # Get the current directory (in Windows format, if possible)
+    REPODIR="$( pwd -W || pwd )"
 }
 
 readInput()
 {
-    # Check if they piped anything in
-    if [ -p /dev/stdin ]; then
-        # Stick it in an array
-        readarray PATHS
-        if [[ ${#PATHS[*]} == 0 ]]; then
-            usage "ERR: No paths"
+    # Only print a prompt if nothing was piped in
+    if [ ! -p /dev/stdin ]; then
+        echo "Enter file paths:"
+    fi
+
+    # Stick it in an array
+    while read -r line; do
+        if [ -z "$line" ] || [[ "$line" =~ ^[[:space:]]*$ ]]; then
+            break
         fi
-    else
-        usage "ERR: No input"
+        PATHS+=("$line")
+    done
+
+    if [[ ${#PATHS[@]} == 0 ]]; then
+        usage "ERR: No paths provided"
     fi
 }
 
@@ -114,9 +130,6 @@ initRepo()
     if [[ -f "$IGNOREFILE" ]]; then
         cp "$IGNOREFILE" "$REPONAME"/.gitignore
     fi
-
-    # Get the current directory (in Windows format, if possible)
-    REPODIR="$(pwd -W || pwd )"
 
     # Initialise the git repo
     pushd "$REPONAME"
@@ -138,7 +151,7 @@ makeGitPointer()
     # We're doing it this hacky way,
     # because re-init'ing against the repo messes it up.
     dotgit="gitdir: $REPODIR/$REPONAME/.git"
-    echo $dotgit > .git
+    echo "$dotgit" > .git
 
     # Add gitignore file
     if [[ -f "$REPODIR/$REPONAME/.gitignore" ]]; then
@@ -157,7 +170,7 @@ flattenDir()
 {
     # If there's only one directory in the folder,
     # move everything out of it, and recurse
-    local fl=($(find -mindepth 1 -maxdepth 1))
+    readarray fl < <(find . -mindepth 1 -maxdepth 1)
     if (( ${#fl[@]} == 1 )) && [[ -d "${fl[0]}" ]]; then
         mv "${fl[0]}"/* .
         rmdir "${fl[0]}"
@@ -178,7 +191,7 @@ addDir()
 
     # Make commit
     makeCommit "$dir"
-    
+
     popd
 
     # Blow away folder
@@ -195,7 +208,7 @@ addFile()
 
     # Make commit
     makeCommit "$file"
-    
+
     popd
 }
 
@@ -222,7 +235,7 @@ addZip()
 
     # Make commit
     makeCommit "$zip"
-    
+
     popd
 
     # Blow away folder
@@ -247,15 +260,15 @@ fi
 for ix in ${!PATHS[*]}; do
     currentpath=${PATHS[$ix]//[$'\t\r\n']}
     echo "Adding $currentpath to git repo"
-    if [ "$MODE" = "DIR" ]; then
+    if [ "$MODE" = 'DIR' ]; then
         addDir "$currentpath"
-    elif [ "$MODE" = "FILE" ]; then
+    elif [ "$MODE" = 'FILE' ]; then
         addFile "$currentpath"
-    elif [ "$MODE" = "ZIP" ]; then
+    elif [ "$MODE" = 'ZIP' ]; then
         addZip "$currentpath"
     fi
 done
 
-if [ "$MODE" = "DIR" ] || [ "$MODE" = "ZIP" ]; then
+if [ "$MODE" = 'DIR' ] || [ "$MODE" = 'ZIP' ]; then
     concludeRepo
 fi
