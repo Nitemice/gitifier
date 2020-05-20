@@ -1,24 +1,30 @@
 #!/bin/bash
 
 PATHS=()
-REPONAME=
-REPODIR=
+
 MODE='DIR'
+REPODIR=
+REPONAME=
+FILENAME=
+
 IGNOREFILE=
 MERGEDIRS=0
-FLATTENZIP=0
+FLATTENDIRS=0
+
 DEBUGPRINT=0
+
 
 debugPrint()
 {
     echo
     echo "PATHS: ${PATHS[*]}"
-    echo "REPONAME: $REPONAME"
-    echo "REPODIR: $REPODIR"
     echo "MODE: $MODE"
+    echo "REPODIR: $REPODIR"
+    echo "REPONAME: $REPONAME"
+    echo "FILENAME: $FILENAME"
     echo "IGNOREFILE: $IGNOREFILE"
     echo "MERGEDIRS: $MERGEDIRS"
-    echo "FLATTENZIP: $FLATTENZIP"
+    echo "FLATTENDIRS: $FLATTENDIRS"
 }
 
 usage()
@@ -34,6 +40,7 @@ Usage: $0 [-f|-d|-z] reponame
    -z: archives mode
 
    -i: .gitignore file to use
+   -n: filename to use
    -m: merge directories
    -l: flatten directories
     "
@@ -54,20 +61,26 @@ parseArgs()
     while [[ $# -gt 0 ]]; do
         opt="$1"
         case $opt in
-            -d|--dir)
-                MODE='DIR'
-                shift # past argument
-                ;;
             -f|--file)
                 MODE='FILE'
+                shift # past argument
+                ;;
+            -d|--dir)
+                MODE='DIR'
                 shift # past argument
                 ;;
             -z|--archive)
                 MODE='ZIP'
                 shift # past argument
                 ;;
+
             -i|--ignorefile|--gitignore)
                 IGNOREFILE="$2"
+                shift # past argument
+                shift # past value
+                ;;
+            -n|--filename)
+                FILENAME="$2"
                 shift # past argument
                 shift # past value
                 ;;
@@ -75,10 +88,11 @@ parseArgs()
                 MERGEDIRS=1
                 shift # past argument
                 ;;
-            -l|--flattenZip)
-                FLATTENZIP=1
+            -l|--flattendirs)
+                FLATTENDIRS=1
                 shift # past argument
                 ;;
+
             -e|--debug)
                 DEBUGPRINT=1
                 shift # past argument
@@ -99,6 +113,11 @@ parseArgs()
 
     # Get the current directory (in Windows format, if possible)
     REPODIR="$( pwd -W || pwd )"
+
+    # Set the FILENAME to the REPONAME if no FILENAME was specified
+    if [[ -z "$FILENAME" ]]; then
+        FILENAME="$REPONAME"
+    fi
 }
 
 readInput()
@@ -201,8 +220,8 @@ addDir()
 addFile()
 {
     file="$1"
-    # Make copy of file, as REPONAME, in REPONAME directory
-    cp -r "$file" "$REPONAME/$REPONAME"
+    # Make copy of file, as FILENAME, in REPONAME directory
+    cp -r "$file" "$REPONAME/$FILENAME"
 
     pushd "$REPONAME"
 
@@ -226,7 +245,7 @@ addZip()
     pushd "$REPONAME"_inprogress
 
     # Remove any nested directories
-    if (( "$FLATTENZIP" )); then
+    if (( "$FLATTENDIRS" )); then
         flattenDir
     fi
 
