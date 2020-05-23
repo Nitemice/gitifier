@@ -20,6 +20,9 @@ specified using `-n filename`.
 For use with a series of versions of a single directory.
 This is the *default* mode.
 
+`-m` can be used when each directory only contains files that differ from
+the previous directory.
+
 ### Archives Mode
 
 For use with a series of tar or zip archives (files or directories).

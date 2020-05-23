@@ -5,6 +5,7 @@ PATHS=()
 MODE='DIR'
 REPODIR=
 REPONAME=
+REPO_INPROGRESS=
 FILENAME=
 
 IGNOREFILE=
@@ -21,6 +22,7 @@ debugPrint()
     echo "MODE: $MODE"
     echo "REPODIR: $REPODIR"
     echo "REPONAME: $REPONAME"
+    echo "REPO_INPROGRESS: $REPO_INPROGRESS"
     echo "FILENAME: $FILENAME"
     echo "IGNOREFILE: $IGNOREFILE"
     echo "MERGEDIRS: $MERGEDIRS"
@@ -118,6 +120,9 @@ parseArgs()
     if [[ -z "$FILENAME" ]]; then
         FILENAME="$REPONAME"
     fi
+
+    # Set the REPO_INPROGRESS name
+    REPO_INPROGRESS="$REPONAME"_inprogress
 }
 
 readInput()
@@ -201,9 +206,9 @@ addDir()
 {
     dir="$1"
     # Make copy of dir, under REPONAME_inprogress
-    cp -r "$dir/" "$REPONAME"_inprogress
+    cp -r "$dir/" "$REPO_INPROGRESS"
 
-    pushd "$REPONAME"_inprogress
+    pushd "$REPO_INPROGRESS"
 
     # Link in git files
     makeGitPointer
@@ -214,7 +219,38 @@ addDir()
     popd
 
     # Blow away folder
-    rm -rf "$REPONAME"_inprogress
+    rm -rf "$REPO_INPROGRESS"
+}
+
+addDirMerge()
+{
+    dir="$1"
+
+    # Make a copy of the repo, to overwrite into
+    mkdir "$REPO_INPROGRESS"
+
+    pushd "$REPO_INPROGRESS"
+
+    # Link in git files
+    makeGitPointer
+
+    # Restore files from git history
+    git reset --hard
+
+    popd
+
+    # Make copy of dir, overwriting REPONAME_inprogress
+    cp -fr "$dir/"* "$REPO_INPROGRESS"
+
+    pushd "$REPO_INPROGRESS"
+
+    # Make commit
+    makeCommit "$dir"
+
+    popd
+
+    # Blow away folder
+    rm -rf "$REPO_INPROGRESS"
 }
 
 addFile()
@@ -236,13 +272,13 @@ addZip()
     zip="$1"
     # Unpack zip into dir, under REPONAME_inprogress
     if [[ $zip == *.zip ]]; then
-        unzip "$zip" -d "$REPONAME"_inprogress
+        unzip "$zip" -d "$REPO_INPROGRESS"
     else
-        mkdir "$REPONAME"_inprogress
-        tar -xf "$zip" -C "$REPONAME"_inprogress
+        mkdir "$REPO_INPROGRESS"
+        tar -xf "$zip" -C "$REPO_INPROGRESS"
     fi
 
-    pushd "$REPONAME"_inprogress
+    pushd "$REPO_INPROGRESS"
 
     # Remove any nested directories
     if (( "$FLATTENDIRS" )); then
@@ -258,7 +294,7 @@ addZip()
     popd
 
     # Blow away folder
-    rm -rf "$REPONAME"_inprogress
+    rm -rf "$REPO_INPROGRESS"
 }
 
 # Parse arguments
@@ -280,7 +316,11 @@ for ix in ${!PATHS[*]}; do
     currentpath=${PATHS[$ix]//[$'\t\r\n']}
     echo "Adding $currentpath to git repo"
     if [ "$MODE" = 'DIR' ]; then
-        addDir "$currentpath"
+        if (( "$MERGEDIRS" )); then
+            addDirMerge "$currentpath"
+        else
+            addDir "$currentpath"
+        fi
     elif [ "$MODE" = 'FILE' ]; then
         addFile "$currentpath"
     elif [ "$MODE" = 'ZIP' ]; then
